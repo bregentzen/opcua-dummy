@@ -296,6 +296,7 @@ UA_atomic_cmpxchg(void * volatile * addr, void *expected, void *newptr) {
  * malloc, as defined in ``/arch/<architecture>/ua_architecture.h``.
  */
 
+/* 
 #ifdef UA_ENABLE_MALLOC_SINGLETON
 extern UA_THREAD_LOCAL void * (*UA_mallocSingleton)(size_t size);
 extern UA_THREAD_LOCAL void (*UA_freeSingleton)(void *ptr);
@@ -312,6 +313,11 @@ extern UA_THREAD_LOCAL void * (*UA_reallocSingleton)(void *ptr, size_t size);
 # define UA_calloc calloc
 # define UA_realloc realloc
 #endif
+*/
+#define UA_malloc(size)           malloc(size)
+#define UA_free(ptr)              free(ptr)
+#define UA_calloc(nmemb, size)    calloc(nmemb, size)
+#define UA_realloc(ptr, size)     realloc(ptr, size)
 
 /* Stack-allocation of memory. Use C99 variable-length arrays if possible.
  * Otherwise revert to alloca. Note that alloca is not supported on some
@@ -379,12 +385,19 @@ extern UA_THREAD_LOCAL void * (*UA_reallocSingleton)(void *ptr, size_t size);
  * again take the server-lock. */
 
 #if UA_MULTITHREADING < 100
-
+/*
 # define UA_LOCK_INIT(lock)
 # define UA_LOCK_DESTROY(lock)
 # define UA_LOCK(lock)
 # define UA_UNLOCK(lock)
 # define UA_LOCK_ASSERT(lock, num)
+*/
+typedef SemaphoreHandle_t UA_Lock;
+
+#define UA_LOCK_INIT(m)    *(m) = xSemaphoreCreateMutex()
+#define UA_LOCK(m)         xSemaphoreTake(*(m), portMAX_DELAY)
+#define UA_UNLOCK(m)       xSemaphoreGive(*(m))
+#define UA_LOCK_DESTROY(m) vSemaphoreDelete(*(m))
 
 #elif defined(UA_ARCHITECTURE_WIN32)
 
