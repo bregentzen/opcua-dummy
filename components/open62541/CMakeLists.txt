@@ -1,4 +1,5 @@
  idf_component_register(
-    SRCS "open62541.c"
+    SRCS
     INCLUDE_DIRS "./include"
+    REQUIRES esp_timer
     )
