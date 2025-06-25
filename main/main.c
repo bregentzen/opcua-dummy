@@ -20,26 +20,50 @@
 #define OPCUA_TASK_STACK_SIZE 16384  // 16 KB Stack für OPC UA Task
 #define OPCUA_TASK_PRIORITY   5      // Priorität im normalen Bereich
 
-void opcua_server_task(void *pvParameters) {
+static void opcua_server_task(void *pvParameters) {
+    ESP_LOGI(TAG, "Starte OPC UA Task…");
+
+    /* 1) Server anlegen */
     UA_Server *server = UA_Server_new();
+    if(!server) {
+        ESP_LOGE(TAG, "Fehler beim Erstellen des OPC UA Servers");
+        vTaskDelete(NULL);
+        return;
+    }
+
+    /* 2) Konfiguration holen */
     UA_ServerConfig *config = UA_Server_getConfig(server);
 
-    // Für Minimalbetrieb ohne Security
-    UA_ServerConfig_setMinimal(config, 4840, NULL);
+    /* 3) Minimal-Konfiguration: Port 4840 und Puffergrößen setzen
+     *    Beispiel zeigt 16 kB Send- und Receive-Buffer.
+     *    So wird genau ein Endpoint auf Port 4840 geöffnet. */
+    UA_Int32 sendBufferSize = 16384;
+    UA_Int32 recvBufferSize = 16384;
+    UA_ServerConfig_setMinimalCustomBuffer(
+        config,
+        4840,            // Port
+        0,               // 0 = Default-Anzahl Worker-Threads
+        sendBufferSize,  // Send-Puffer
+        recvBufferSize   // Receive-Puffer
+    ); 
 
-    ESP_LOGI(TAG, "Starte OPC UA Server...");
+    /* 4) Server starten */
+    UA_StatusCode rc = UA_Server_run_startup(server);
+    if(rc != UA_STATUSCODE_GOOD) {
+        ESP_LOGE(TAG, "Startup-Fehler: 0x%08x", (unsigned int)rc);
+        UA_Server_delete(server);
+        vTaskDelete(NULL);
+        return;
+    }
+    ESP_LOGI(TAG, "OPC UA Server läuft auf opc.tcp://<esp32-ip>:4840");
 
-    UA_Boolean running = true;
-    UA_StatusCode retval = UA_Server_run(server, &running);
-    if(retval != UA_STATUSCODE_GOOD) {
-        ESP_LOGE(TAG, "Fehler beim Starten: 0x%08x", (unsigned int)retval);
+    /* 5) Iterations-Loop: blockierend bis max. 50 ms auf Anfragen warten */
+    while(true) {
+        UA_Server_run_iterate(server, true);
     }
 
-    while (running) {
-        UA_Server_run_iterate(server, true);  // true = blockierend
-        ESP_LOGI(TAG, "Server läuft noch...");
-        vTaskDelay(pdMS_TO_TICKS(1000));      // Verhindert Watchdog-Crash
-    }
+    /* (unreachable) */
+    UA_Server_run_shutdown(server);
     UA_Server_delete(server);
     vTaskDelete(NULL);
 }

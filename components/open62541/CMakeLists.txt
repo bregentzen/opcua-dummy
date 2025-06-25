@@ -1,6 +1,7 @@
 idf_component_register(
   SRCS "open62541.c"
   INCLUDE_DIRS "include"
+  REQUIRES freertos lwip
 )
 
 target_include_directories(${COMPONENT_LIB} PRIVATE
