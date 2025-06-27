@@ -13,17 +13,17 @@
 #include "esp_wifi.h"
 #include "nvs_flash.h"
 #include "esp_netif.h"
+#include "esp_sntp.h"
 
 #include "open62541.h"
 
 #define TAG "OPCUA"
-#define OPCUA_TASK_STACK_SIZE 16384  // 16 KB Stack für OPC UA Task
+#define OPCUA_TASK_STACK_SIZE 131072  // 16 KB Stack für OPC UA Task
 #define OPCUA_TASK_PRIORITY   5      // Priorität im normalen Bereich
 
 static void opcua_server_task(void *pvParameters) {
     ESP_LOGI(TAG, "Starte OPC UA Task…");
 
-    /* 1) Server anlegen */
     UA_Server *server = UA_Server_new();
     if(!server) {
         ESP_LOGE(TAG, "Fehler beim Erstellen des OPC UA Servers");
@@ -31,23 +31,31 @@ static void opcua_server_task(void *pvParameters) {
         return;
     }
 
-    /* 2) Konfiguration holen */
     UA_ServerConfig *config = UA_Server_getConfig(server);
+    UA_ServerConfig_setDefault(config);
 
-    /* 3) Minimal-Konfiguration: Port 4840 und Puffergrößen setzen
-     *    Beispiel zeigt 16 kB Send- und Receive-Buffer.
-     *    So wird genau ein Endpoint auf Port 4840 geöffnet. */
-    UA_Int32 sendBufferSize = 16384;
-    UA_Int32 recvBufferSize = 16384;
-    UA_ServerConfig_setMinimalCustomBuffer(
-        config,
-        4840,            // Port
-        0,               // 0 = Default-Anzahl Worker-Threads
-        sendBufferSize,  // Send-Puffer
-        recvBufferSize   // Receive-Puffer
-    ); 
+    // Beispiel: Füge eine Variable im Address Space hinzu
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, "myInteger");
+    UA_VariableAttributes attr = UA_VariableAttributes_default;
+    UA_Int32 myInteger = 42;
+    UA_Variant_setScalar(&attr.value, &myInteger, &UA_TYPES[UA_TYPES_INT32]);
+    attr.displayName = UA_LOCALIZEDTEXT("en-US", "MyInteger");
 
-    /* 4) Server starten */
+    UA_StatusCode addStatus = UA_Server_addVariableNode(
+        server,
+        myIntegerNodeId,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), // Parent Node: Objects folder
+        UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),     // ReferenceType
+        UA_QUALIFIEDNAME(1, "MyInteger"),             // BrowseName
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+        attr,
+        NULL,
+        NULL);
+
+    if(addStatus != UA_STATUSCODE_GOOD) {
+        ESP_LOGE(TAG, "Variable konnte nicht hinzugefügt werden: 0x%08x", (unsigned int)addStatus);
+    }
+
     UA_StatusCode rc = UA_Server_run_startup(server);
     if(rc != UA_STATUSCODE_GOOD) {
         ESP_LOGE(TAG, "Startup-Fehler: 0x%08x", (unsigned int)rc);
@@ -55,14 +63,16 @@ static void opcua_server_task(void *pvParameters) {
         vTaskDelete(NULL);
         return;
     }
+
     ESP_LOGI(TAG, "OPC UA Server läuft auf opc.tcp://<esp32-ip>:4840");
 
-    /* 5) Iterations-Loop: blockierend bis max. 50 ms auf Anfragen warten */
     while(true) {
-        UA_Server_run_iterate(server, true);
+        // True = blockierend, besser bei FreeRTOS aber nicht für längere Blocking calls
+        // Besser: false + kurze Delays (oder kein Delay)
+        UA_Server_run_iterate(server, false);
+        vTaskDelay(pdMS_TO_TICKS(10)); // 10 ms Delay zum Yield
     }
 
-    /* (unreachable) */
     UA_Server_run_shutdown(server);
     UA_Server_delete(server);
     vTaskDelete(NULL);
