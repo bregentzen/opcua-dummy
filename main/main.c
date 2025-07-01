@@ -18,7 +18,7 @@
 #include "open62541.h"
 
 #define TAG "OPCUA"
-#define OPCUA_TASK_STACK_SIZE 131072  // 16 KB Stack für OPC UA Task
+#define OPCUA_TASK_STACK_SIZE 16384  // 16 KB Stack für OPC UA Task
 #define OPCUA_TASK_PRIORITY   5      // Priorität im normalen Bereich
 
 static void opcua_server_task(void *pvParameters) {
