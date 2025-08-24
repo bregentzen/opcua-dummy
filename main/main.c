@@ -59,8 +59,8 @@ static void wifi_init_and_connect(void) {
 
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = "Buschfunk Bregen",
-            .password = "Gyrossuppe01",
+            .ssid = "WLAN-AP",
+            .password = "password",
             // Rely on defaults for WPA2/3; IDF negotiates SAE automatically if AP supports it.
         },
     };
