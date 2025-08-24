@@ -98,8 +98,8 @@ void app_main(void) {
 
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = "Buschfunk Bregen",
-            .password = "Gyrossuppe01",
+            .ssid = "WLAN-AP",
+            .password = "password",
         },
     };
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
